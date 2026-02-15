@@ -1,7 +1,7 @@
-
-
 /*
-  BTC Balance. GraviDuck --- 2026
+  BTC Wallet Dashboard. GraviDuck --- 2026
+  Shows BTC Balance, EUR Value, and Last 5 Transactions
+  Auto-refreshes every 12 hours
 */
 
 #include <WiFi.h>
@@ -16,13 +16,15 @@ const char* walletAddress = "BTC WALLET ADDRESS";
 WebServer server(80);
 
 String lastBalance = "Loading...";
-String lastUsdValue = "Loading...";
+String lastEurValue = "Loading...";
 String lastTransactions = "Loading...";
 unsigned long lastUpdate = 0;
 const unsigned long refreshInterval = 12UL * 60UL * 60UL * 1000UL;  // 12 hours
 
 // === Bitcoin balance ===
-String getDigiByteBalance() {
+double bitcoinBalanceValue = 0.0; // Guardamos el valor numérico para cálculo EUR
+
+String getBitcoinBalance() {
   HTTPClient http;
   String url = "https://chainz.cryptoid.info/btc/api.dws?q=getbalance&a=" + String(walletAddress);
   http.begin(url);
@@ -36,25 +38,30 @@ String getDigiByteBalance() {
   String balance = http.getString();
   http.end();
   balance.trim();
+  bitcoinBalanceValue = balance.toDouble(); // Guardar para cálculo EUR
   return balance + " BTC";
 }
 
-// === Bitcoin USD price ===
-String getDigiByteUSD() {
+// === Bitcoin EUR price ===
+double bitcoinPriceEUR = 0.0;
+
+String getBitcoinEUR() {
   HTTPClient http;
-  String url = "https://chainz.cryptoid.info/btc/api.dws?q=ticker.usd";
+  String url = "https://chainz.cryptoid.info/btc/api.dws?q=ticker.eur";
   http.begin(url);
   int httpCode = http.GET();
 
   if (httpCode != 200) {
     http.end();
-    return lastUsdValue;  // keep previous value on error
+    return lastEurValue;
   }
 
-  String usd = http.getString();
+  String eur = http.getString();
   http.end();
-  usd.trim();
-  return "$" + usd;
+  eur.trim();
+  bitcoinPriceEUR = eur.toDouble(); // Guardar precio numérico
+  double totalEur = bitcoinBalanceValue * bitcoinPriceEUR;
+  return "€" + String(totalEur, 2); // Mostrar balance total en EUR
 }
 
 // === Last 5 transactions ===
@@ -75,7 +82,7 @@ String getLastTransactions() {
 
     html += "<h3>Last 5 Transactions</h3>";
     html += "<table style='width:95%;margin:auto;font-size:0.8em;border-collapse:collapse;text-align:center;'>";
-    html += "<tr><th>TxID</th><th>Amount (DGB)</th><th>Conf</th></tr>";
+    html += "<tr><th>TxID</th><th>Amount (BTC)</th><th>Conf</th></tr>";
 
     int count = 0;
     for (JsonObject tx : doc.as<JsonArray>()) {
@@ -85,7 +92,6 @@ String getLastTransactions() {
       int confs = tx["confirmations"].as<int>();
 
       html += "<tr>";
-      // Display full TxID
       html += "<td style='word-break:break-all;'>" + hash + "</td>";
       html += "<td>" + String(amount, 4) + "</td>";
       html += "<td>" + String(confs) + "</td>";
@@ -94,9 +100,9 @@ String getLastTransactions() {
     }
     html += "</table>";
 
-    html += "<p style='margin-top:15px;font-size:0.9em;'>To view detailed transactions visit:<br>"
-            "<a href='https://chainz.cryptoid.info/dgb/' target='_blank' style='color:#0ff;'>"
-            "https://chainz.cryptoid.info/dgb/</a></p>";
+    html += "<p style='margin-top:15px;font-size:0.9em;'>View detailed transactions:<br>"
+            "<a href='https://chainz.cryptoid.info/btc/' target='_blank' style='color:#0ff;'>"
+            "https://chainz.cryptoid.info/btc/</a></p>";
 
   } else {
     html = "<p style='color:red;'>Error fetching transactions</p>";
@@ -109,20 +115,18 @@ String getLastTransactions() {
 // === Web Page ===
 String htmlPage() {
   String page = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'>";
-  page += "<title>DigiByte Wallet Dashboard</title><style>";
+  page += "<title>Bitcoin Wallet Dashboard</title><style>";
   page += "body{font-family:Arial;text-align:center;background:#111;color:#0f0;margin:0;padding:20px;}";
   page += ".box{border:2px solid #0f0;padding:25px;border-radius:12px;max-width:900px;margin:auto;}";
   page += "h1{color:#00ffff;margin-bottom:20px;} p{line-height:1.8;font-size:1em;} a{color:#0ff;text-decoration:none;}";
   page += "a:hover{text-decoration:underline;} table,th,td{border:1px solid #0f0;padding:6px;} th{background:#022;} td{color:#0f0;}";
   page += "</style></head><body>";
   page += "<div class='box'>";
-  page += "<h1>DigiByte Wallet Dashboard</h1>";
+  page += "<h1>Bitcoin Wallet Dashboard</h1>";
   page += "<p><b>Wallet:</b><br>" + String(walletAddress) + "</p>";
   page += "<p><b>Balance:</b> " + lastBalance + "</p>";
-  page += "<p><b>USD Value:</b> " + lastUsdValue + "</p>";
+  page += "<p><b>EUR Value:</b> " + lastEurValue + "</p>";
   page += lastTransactions;
-  page += "<p style='margin-top:25px;color:#0ff;'>Support my projects ☕<br>"
-          "<a href='https://ko-fi.com/diyelektronics' target='_blank'>DIY EleKtronics – Buy Me a Coffee</a></p>";
   page += "</div></body></html>";
   return page;
 }
@@ -130,8 +134,8 @@ String htmlPage() {
 // === Handlers ===
 void handleRoot() { server.send(200, "text/html", htmlPage()); }
 void handleRefresh() {
-  lastBalance = getDigiByteBalance();
-  lastUsdValue = getDigiByteUSD();
+  lastBalance = getBitcoinBalance();
+  lastEurValue = getBitcoinEUR();
   lastTransactions = getLastTransactions();
   lastUpdate = millis();
   server.sendHeader("Location", "/", true);
@@ -151,8 +155,8 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   // Initial fetch
-  lastBalance = getDigiByteBalance();
-  lastUsdValue = getDigiByteUSD();
+  lastBalance = getBitcoinBalance();
+  lastEurValue = getBitcoinEUR();
   lastTransactions = getLastTransactions();
   lastUpdate = millis();
 
@@ -166,8 +170,8 @@ void setup() {
 void loop() {
   server.handleClient();
   if (millis() - lastUpdate > refreshInterval) {
-    lastBalance = getDigiByteBalance();
-    lastUsdValue = getDigiByteUSD();
+    lastBalance = getBitcoinBalance();
+    lastEurValue = getBitcoinEUR();
     lastTransactions = getLastTransactions();
     lastUpdate = millis();
   }
