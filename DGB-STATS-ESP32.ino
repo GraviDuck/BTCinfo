@@ -1,10 +1,7 @@
 
 
 /*
-  DigiByte Wallet Dashboard Web Server
-  Shows DGB Balance, USD Value, and Last 5 Transactions
-  Auto-refreshes every 12 hours
-  DIY EleKtronics – 2025
+  BTC Balance. GraviDuck --- 2026
 */
 
 #include <WiFi.h>
@@ -14,7 +11,7 @@
 
 const char* ssid     = "WIFI SSID";
 const char* password = "WIFI PASSWORD";
-const char* walletAddress = "DGB WALLET ADDRESS";
+const char* walletAddress = "BTC WALLET ADDRESS";
 
 WebServer server(80);
 
@@ -24,10 +21,10 @@ String lastTransactions = "Loading...";
 unsigned long lastUpdate = 0;
 const unsigned long refreshInterval = 12UL * 60UL * 60UL * 1000UL;  // 12 hours
 
-// === DigiByte balance ===
+// === Bitcoin balance ===
 String getDigiByteBalance() {
   HTTPClient http;
-  String url = "https://chainz.cryptoid.info/dgb/api.dws?q=getbalance&a=" + String(walletAddress);
+  String url = "https://chainz.cryptoid.info/btc/api.dws?q=getbalance&a=" + String(walletAddress);
   http.begin(url);
   int httpCode = http.GET();
 
@@ -39,13 +36,13 @@ String getDigiByteBalance() {
   String balance = http.getString();
   http.end();
   balance.trim();
-  return balance + " DGB";
+  return balance + " BTC";
 }
 
-// === DigiByte USD price ===
+// === Bitcoin USD price ===
 String getDigiByteUSD() {
   HTTPClient http;
-  String url = "https://chainz.cryptoid.info/dgb/api.dws?q=ticker.usd";
+  String url = "https://chainz.cryptoid.info/btc/api.dws?q=ticker.usd";
   http.begin(url);
   int httpCode = http.GET();
 
@@ -63,7 +60,7 @@ String getDigiByteUSD() {
 // === Last 5 transactions ===
 String getLastTransactions() {
   HTTPClient http;
-  String url = "https://chainz.cryptoid.info/dgb/api.dws?q=lasttxs&a=" + String(walletAddress);
+  String url = "https://chainz.cryptoid.info/btc/api.dws?q=lasttxs&a=" + String(walletAddress);
   http.begin(url);
   int httpCode = http.GET();
   String html = "";
